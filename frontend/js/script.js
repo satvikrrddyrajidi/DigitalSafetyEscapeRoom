@@ -1,28 +1,29 @@
+
 "use strict";
 
 const API_BASE_URL = "https://digital-safety-escape-room-api.onrender.com/api";
 const ESCAPE_TARGET = 90;
 
 const missionInfo = {
-    "phishing": {
+    phishing: {
         title: "Phishing Detection",
         icon: "🎣",
         description: "Identify suspicious messages, fake websites, and attempts to steal your information.",
         color: "#9b72ff"
     },
-    "password": {
+    password: {
         title: "Password Security",
         icon: "🔐",
         description: "Defend accounts using strong passwords and secure authentication practices.",
         color: "#48e0d0"
     },
-    "qr": {
+    qr: {
         title: "Malicious QR Codes",
         icon: "▦",
         description: "Recognize dangerous QR codes, suspicious links, and unsafe scanning requests.",
         color: "#ffbd69"
     },
-    "scam": {
+    scam: {
         title: "Online Scam Awareness",
         icon: "🛡️",
         description: "Avoid online fraud, impersonation, fake offers, and social engineering traps.",
@@ -82,9 +83,7 @@ function identifyMission(category) {
 function getMissionInfo(category) {
     const key = identifyMission(category);
 
-    if (missionInfo[key]) return missionInfo[key];
-
-    return {
+    return missionInfo[key] || {
         title: category || "Cybersecurity Challenge",
         icon: "🔒",
         description: "Complete these cybersecurity challenges to progress toward the exit.",
@@ -103,6 +102,8 @@ function escapeHtml(value) {
 }
 
 function showToast(message) {
+    if (!ui.toast) return;
+
     ui.toast.textContent = message;
     ui.toast.classList.remove("hidden");
 
@@ -126,7 +127,7 @@ async function loadChallenges() {
         '<div class="loading-card">Connecting to the cybersecurity game server...</div>';
 
     try {
-        const response = await fetch(`${API_BASE}/challenges`);
+        const response = await fetch(`${API_BASE_URL}/challenges`);
 
         if (!response.ok) {
             throw new Error(`Server returned status ${response.status}`);
@@ -145,6 +146,7 @@ async function loadChallenges() {
         allChallenges.sort((a, b) => Number(a.id) - Number(b.id));
 
         missionGroups = buildMissionGroups(allChallenges);
+
         maximumPoints = allChallenges.reduce(
             (sum, challenge) => sum + getPoints(challenge),
             0
@@ -153,7 +155,6 @@ async function loadChallenges() {
         $("missionCount").textContent = missionGroups.length;
         $("challengeCount").textContent = allChallenges.length;
         $("maximumScore").textContent = maximumPoints;
-
         $("maxScore").textContent = maximumPoints;
         $("liveMaxScore").textContent = `/ ${maximumPoints} POINTS`;
 
@@ -166,7 +167,8 @@ async function loadChallenges() {
             '<div class="loading-card">Unable to connect to the game server.</div>';
 
         ui.loadError.textContent =
-            "Make sure Flask is running at http://127.0.0.1:5000 and the /api/challenges endpoint is working. Refresh this page after starting the backend.";
+            `Could not load challenges: ${error.message}. ` +
+            "Check the backend URL and the Render service logs, then refresh.";
 
         ui.loadError.classList.remove("hidden");
     }
@@ -215,12 +217,14 @@ function getScorePercentage() {
 
 function updateOverallProgress() {
     const answered = getCompletedCount();
+
     const percentage = allChallenges.length
         ? Math.round((answered / allChallenges.length) * 100)
         : 0;
 
     $("overallPercentage").textContent = `${percentage}%`;
     $("progressBar").style.width = `${percentage}%`;
+
     $("progressStatus").textContent =
         `${answered} of ${allChallenges.length} challenges completed`;
 
@@ -269,7 +273,7 @@ function renderMissionCards() {
             <div class="mission-card-top">
                 <span class="mission-icon">${mission.info.icon}</span>
                 <span class="mission-tag">
-                    ${completed ? "✓ MISSION COMPLETE" : "MISSION LOCK STATUS: OPEN"}
+                    ${completed ? "✓ MISSION COMPLETE" : "MISSION STATUS: OPEN"}
                 </span>
             </div>
             <h3>${escapeHtml(mission.info.title)}</h3>
@@ -293,6 +297,11 @@ function renderMissionCards() {
 }
 
 function startMission(mission) {
+    if (!mission) {
+        finishGame();
+        return;
+    }
+
     if (sessionFinished) resetGame();
 
     currentMission = mission;
@@ -351,7 +360,6 @@ function renderQuestion() {
     ui.options.innerHTML = "";
     ui.feedback.className = "feedback-box hidden";
     ui.feedback.textContent = "";
-
     ui.hint.textContent = "Select one answer, then submit your decision.";
 
     const options = parseOptions(challenge.options);
@@ -377,6 +385,7 @@ function renderQuestion() {
 
             button.classList.add("selected");
             ui.next.disabled = false;
+
             ui.hint.textContent =
                 `Selected option ${String.fromCharCode(65 + index)}. Ready to submit.`;
         });
@@ -385,10 +394,11 @@ function renderQuestion() {
     });
 
     if (answerSubmitted) {
-        showPreviouslyAnswered(challenge, options);
+        showPreviouslyAnswered(challenge);
     }
 
     ui.next.disabled = !answerSubmitted && selectedOption === null;
+
     ui.next.textContent = answerSubmitted
         ? (currentQuestionIndex === challenges.length - 1
             ? "FINISH MISSION →"
@@ -406,7 +416,7 @@ function parseOptions(value) {
             const parsed = JSON.parse(value);
             if (Array.isArray(parsed)) return parsed;
         } catch (_) {
-            // A plain string is handled below.
+            // Fall back to newline-separated options.
         }
 
         return value.split(/\r?\n/).map(item => item.trim()).filter(Boolean);
@@ -415,18 +425,24 @@ function parseOptions(value) {
     return [];
 }
 
-function showPreviouslyAnswered(challenge, options) {
+function showPreviouslyAnswered(challenge) {
     const id = Number(challenge.id);
     const wasCorrect = correctQuestions.has(id);
 
-    ui.options.querySelectorAll(".option-btn").forEach(button => {
+    ui.options.querySelectorAll(".option-btn").forEach((button, index) => {
         button.disabled = true;
+
+        if (index === answeredQuestions.get(id)) {
+            button.classList.add(wasCorrect ? "correct-option" : "wrong-option");
+        }
     });
 
-    ui.feedback.className = `feedback-box ${wasCorrect ? "correct" : "incorrect"}`;
+    ui.feedback.className =
+        `feedback-box ${wasCorrect ? "correct" : "incorrect"}`;
+
     ui.feedback.textContent = wasCorrect
         ? "✓ Correct answer. Your points have been recorded."
-        : "✗ This question was answered incorrectly. You can retry the mission after completing the game.";
+        : "✗ This question was answered incorrectly. You can replay the game after finishing.";
 
     ui.hint.textContent = "This question has already been answered in this attempt.";
 }
@@ -451,7 +467,7 @@ async function submitAnswer() {
     ui.next.textContent = "CHECKING ANSWER...";
 
     try {
-        const response = await fetch(`${API_BASE}/submit-answer`, {
+        const response = await fetch(`${API_BASE_URL}/submit-answer`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
@@ -463,7 +479,9 @@ async function submitAnswer() {
         const result = await response.json();
 
         if (!response.ok) {
-            throw new Error(result.error || result.message || "Answer submission failed.");
+            throw new Error(
+                result.error || result.message || "Answer submission failed."
+            );
         }
 
         const correct = Boolean(
@@ -473,16 +491,19 @@ async function submitAnswer() {
         answerSubmitted = true;
         answeredQuestions.set(id, selectedOption);
 
+        const pointsEarned = Number(
+            result.points_earned ?? result.points ?? getPoints(challenge)
+        );
+
         if (correct) {
             correctQuestions.add(id);
-            earnedPoints += Number(
-                result.points_earned ?? result.points ?? getPoints(challenge)
-            );
+            earnedPoints += Number.isFinite(pointsEarned) ? pointsEarned : getPoints(challenge);
 
             ui.feedback.className = "feedback-box correct";
             ui.feedback.textContent =
-                `✓ CORRECT! +${Number(result.points_earned ?? result.points ?? getPoints(challenge))} points. ` +
-                (result.explanation || "Great work, player. Keep going!");
+                `✓ CORRECT! +${pointsEarned} points. ` +
+                (result.explanation || "Great work. Keep going!");
+
             showToast("Correct answer! Points earned.");
         } else {
             correctQuestions.delete(id);
@@ -490,7 +511,8 @@ async function submitAnswer() {
             ui.feedback.className = "feedback-box incorrect";
             ui.feedback.textContent =
                 "✗ Not quite right. " +
-                (result.explanation || "Review the situation carefully for your next attempt.");
+                (result.explanation || "Review the situation carefully.");
+
             showToast("Incorrect answer. Keep learning.");
         }
 
@@ -518,7 +540,7 @@ async function submitAnswer() {
 
         ui.feedback.className = "feedback-box incorrect";
         ui.feedback.textContent =
-            `Unable to submit this answer: ${error.message}. Check that your Flask server is running, then try again.`;
+            `Unable to submit this answer: ${error.message}. Try again.`;
 
         ui.next.disabled = false;
         ui.next.textContent = "TRY SUBMITTING AGAIN →";
@@ -570,13 +592,14 @@ function finishGame() {
         escaped ? "YOU ESCAPED!" : "STILL TRAPPED!";
 
     $("resultMessage").textContent = escaped
-        ? "The security door unlocks. Your character escapes the room because you proved your cybersecurity skills."
-        : `Your score is ${scorePercentage}%. You need at least ${ESCAPE_TARGET}% to escape. The door remains locked. Review what you learned and try again.`;
+        ? "The security door unlocks. You proved your cybersecurity skills."
+        : `Your score is ${scorePercentage}%. You need at least ${ESCAPE_TARGET}% to escape. Review what you learned and try again.`;
 
     $("finalScore").textContent = earnedPoints;
     $("maxScore").textContent = maximumPoints;
     $("resultAccuracy").textContent = `${accuracy}%`;
     $("resultCorrect").textContent = `${correctQuestions.size}/${allChallenges.length}`;
+
     $("resultMissions").textContent =
         `${missionGroups.filter(mission =>
             mission.challenges.every(challenge =>
@@ -585,9 +608,10 @@ function finishGame() {
         ).length}/${missionGroups.length}`;
 
     $("resultLevel").textContent = getRank(scorePercentage, escaped);
+
     $("resultRecommendation").textContent = escaped
-        ? "Excellent work. You demonstrated strong digital safety awareness. Keep applying these habits online."
-        : "Review the explanations, learn from incorrect answers, and replay the escape room to improve your score.";
+        ? "Excellent work. Keep applying these digital safety habits online."
+        : "Review the explanations, learn from incorrect answers, and replay the escape room.";
 
     $("resultMeterFill").style.width = `${Math.min(scorePercentage, 100)}%`;
 
