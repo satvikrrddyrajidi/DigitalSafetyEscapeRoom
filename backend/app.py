@@ -1,4 +1,6 @@
 
+import os
+
 from flask import Flask, jsonify, request
 from flask_cors import CORS
 
@@ -12,32 +14,14 @@ from database import (
 app = Flask(__name__)
 CORS(app)
 
-# Correct answers use zero-based indexes:
-# 0 = first option, 1 = second option, 2 = third option, 3 = fourth option.
-# These answer indexes match the 12 challenges currently in your API.
-ANSWER_KEY = {
-    1: 2,   # Urgent bank verification email
-    2: 1,   # Suspicious social media login
-    3: 2,   # Internship attachment asking to enable macros
-    4: 2,   # Strongest password
-    5: 1,   # Password reuse
-    6: 1,   # Multi-factor authentication
-    7: 2,   # Suspicious shopping-voucher QR code
-    8: 1,   # Tampered parking payment QR code
-    9: 1,   # Checking a QR code before scanning
-    10: 2,  # Lottery processing-fee scam
-    11: 2,  # Fake customer-support OTP request
-    12: 0,  # Guaranteed investment returns scam
-}
-
 app.config["JSON_SORT_KEYS"] = False
 
-# Initialize the existing database without deleting its records.
+# Create or upgrade the database when the service starts.
 initialize_database()
 
 
 def public_challenge(challenge):
-    """Return challenge data without revealing the answer."""
+    """Return challenge data without exposing answers or explanations."""
     if challenge is None:
         return None
 
@@ -151,6 +135,7 @@ def submit_answer():
             }), 404
 
         options = challenge.get("options", [])
+        correct_option = challenge.get("correct_option")
 
         if (
             not isinstance(options, list)
@@ -160,25 +145,22 @@ def submit_answer():
                 "error": "The selected option is invalid."
             }), 400
 
-        # Use the explicit answer key instead of potentially incorrect
-        # correct_option values stored in the existing database.
-        if challenge_id not in ANSWER_KEY:
+        if (
+            isinstance(correct_option, bool)
+            or not isinstance(correct_option, int)
+            or not 0 <= correct_option < len(options)
+        ):
             app.logger.error(
-                "No answer key exists for challenge ID %s",
+                "Invalid correct_option for challenge ID %s",
                 challenge_id,
             )
             return jsonify({
-                "error": "An answer key is not configured for this challenge."
+                "error": "The correct answer is not configured properly."
             }), 500
 
-        correct_option = ANSWER_KEY[challenge_id]
         is_correct = selected_option == correct_option
-
         points_available = int(challenge.get("points", 10))
         points_earned = points_available if is_correct else 0
-
-        # Use the existing database explanation when available.
-        explanation = challenge.get("explanation", "")
 
         return jsonify({
             "challenge_id": challenge_id,
@@ -188,7 +170,7 @@ def submit_answer():
             "correct": is_correct,
             "points_earned": points_earned,
             "points": points_earned,
-            "explanation": explanation,
+            "explanation": challenge.get("explanation", ""),
         }), 200
 
     except Exception:
@@ -224,19 +206,11 @@ def method_not_allowed(error):
 
 
 if __name__ == "__main__":
-    print("=" * 50)
-    print(" DIGITAL SAFETY ESCAPE ROOM")
-    print("=" * 50)
-    print("Backend:   http://127.0.0.1:5000")
-    print("Health:    http://127.0.0.1:5000/api/health")
-    print("Challenges: http://127.0.0.1:5000/api/challenges")
-    print("Answer checking: enabled")
-    print("Press Ctrl+C to stop the server.")
-    print("=" * 50)
+    print("Digital Safety Escape Room API starting...")
 
     app.run(
         host="127.0.0.1",
-        port=5000,
+        port=int(os.environ.get("PORT", 5000)),
         debug=False,
         use_reloader=False,
     )
