@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CYBERLAB | Digital Safety Escape Room</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <div class="background-grid"></div>
+
+    <header class="topbar">
+        <a class="brand" href="#" id="homeLink">
+            <span class="brand-icon">C</span>
+            <span>CYBER<span class="accent">LAB</span>
+                <small>DIGITAL SAFETY ESCAPE ROOM</small>
+            </span>
+        </a>
+        <div class="top-status">
+            <span class="live-dot"></span> GAME SYSTEM ONLINE
+        </div>
+    </header>
+
+    <main class="container">
+        <section id="missionsSection">
+            <div class="hero">
+                <div class="hero-copy">
+                    <div class="eyebrow">◆ CYBER SURVIVAL PROTOCOL 01</div>
+                    <h1>THINK SMART.<br><span>ESCAPE SAFE.</span></h1>
+                    <p>
+                        Four missions. One locked exit. Use your cybersecurity
+                        knowledge to survive the digital danger and escape.
+                    </p>
+                    <button class="primary-btn" id="startGameBtn">
+                        START YOUR MISSION <span>→</span>
+                    </button>
+                </div>
+
+                <div class="room-preview">
+                    <div class="room-label">ESCAPE ROOM // LIVE</div>
+                    <div class="pixel-room">
+                        <div class="pixel-lamp lamp-one"></div>
+                        <div class="pixel-lamp lamp-two"></div>
+                        <div class="pixel-door">
+                            <div class="door-lock">✦</div>
+                        </div>
+                        <div class="pixel-character character-idle">
+                            <div class="char-hair"></div>
+                            <div class="char-face"></div>
+                            <div class="char-body"></div>
+                            <div class="char-arm left-arm"></div>
+                            <div class="char-arm right-arm"></div>
+                            <div class="char-leg left-leg"></div>
+                            <div class="char-leg right-leg"></div>
+                        </div>
+                        <div class="room-floor"></div>
+                    </div>
+                    <div class="room-caption">
+                        <span>PLAYER STATUS</span>
+                        <strong><span class="live-dot"></span> TRAPPED — AWAITING INPUT</strong>
+                    </div>
+                </div>
+            </div>
+
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <span class="stat-icon">◈</span>
+                    <div><small>MISSIONS</small><strong id="missionCount">4</strong></div>
+                </div>
+                <div class="stat-card">
+                    <span class="stat-icon">▤</span>
+                    <div><small>CHALLENGES</small><strong id="challengeCount">12</strong></div>
+                </div>
+                <div class="stat-card">
+                    <span class="stat-icon">★</span>
+                    <div><small>MAXIMUM SCORE</small><strong id="maximumScore">120</strong></div>
+                </div>
+                <div class="stat-card">
+                    <span class="stat-icon">⚑</span>
+                    <div><small>ESCAPE TARGET</small><strong>90%</strong></div>
+                </div>
+            </div>
+
+            <div class="section-heading">
+                <div>
+                    <div class="eyebrow">YOUR OBJECTIVES</div>
+                    <h2>Choose your mission</h2>
+                    <p>Complete all missions to unlock the final escape challenge.</p>
+                </div>
+                <div class="overall-progress">
+                    <span>OVERALL PROGRESS</span>
+                    <strong id="overallPercentage">0%</strong>
+                    <div class="progress-track"><div id="progressBar" class="progress-fill"></div></div>
+                    <small id="progressStatus">Awaiting player</small>
+                </div>
+            </div>
+
+            <div id="challengeGrid" class="mission-grid">
+                <div class="loading-card">Connecting to game server...</div>
+            </div>
+            <div id="loadError" class="error-box hidden"></div>
+        </section>
+
+        <section id="challengeArea" class="hidden">
+            <div class="game-topline">
+                <button class="text-btn" id="backToMissionsBtn">← BACK TO MISSIONS</button>
+                <div class="game-chip"><span class="live-dot"></span> LIVE CHALLENGE</div>
+            </div>
+
+            <div class="game-layout">
+                <aside class="game-sidebar">
+                    <div class="sidebar-room">
+                        <div class="eyebrow">PLAYER LOCATION</div>
+                        <div class="mini-room">
+                            <div class="mini-door"></div>
+                            <div class="mini-character">
+                                <div class="mini-head"></div><div class="mini-body"></div>
+                                <div class="mini-legs"></div>
+                            </div>
+                        </div>
+                        <h3>THE LOCKED ROOM</h3>
+                        <p>Answer carefully. Every point brings you closer to the exit.</p>
+                    </div>
+                    <div class="score-panel">
+                        <span>YOUR SCORE</span>
+                        <strong id="liveScore">0</strong>
+                        <small id="liveMaxScore">/ 120 POINTS</small>
+                    </div>
+                    <div class="target-panel">
+                        <span>ESCAPE REQUIREMENT</span>
+                        <strong>90%</strong>
+                        <div class="progress-track"><div id="escapeProgress" class="progress-fill"></div></div>
+                        <small id="escapeProgressText">0% achieved</small>
+                    </div>
+                </aside>
+
+                <div class="question-panel">
+                    <div class="question-header">
+                        <div>
+                            <div class="eyebrow" id="currentCategory">MISSION</div>
+                            <h2 id="currentMissionTitle">Loading mission...</h2>
+                        </div>
+                        <div class="question-count" id="questionCounter">QUESTION 1</div>
+                    </div>
+                    <p class="mission-description" id="currentMissionDescription"></p>
+
+                    <div class="mission-progress">
+                        <div class="progress-track">
+                            <div id="missionProgressBar" class="progress-fill"></div>
+                        </div>
+                        <span id="missionProgressText">0 / 0 answered</span>
+                    </div>
+
+                    <div class="scenario-box">
+                        <div class="scenario-icon">⚠</div>
+                        <div>
+                            <strong>SCENARIO DETECTED</strong>
+                            <p id="questionScenario"></p>
+                        </div>
+                    </div>
+
+                    <div class="question-content">
+                        <h3 id="questionTitle">Challenge</h3>
+                        <p id="questionText"></p>
+                        <div id="optionsContainer" class="options-container"></div>
+                    </div>
+
+                    <div id="feedbackBox" class="feedback-box hidden" role="status"></div>
+                    <p id="selectionHint" class="selection-hint">Select one answer to continue.</p>
+                    <div class="question-actions">
+                        <button id="nextQuestionBtn" class="primary-btn" disabled>
+                            SUBMIT ANSWER →
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <section id="resultsSection" class="hidden">
+            <div id="resultScene" class="result-scene">
+                <div class="result-scanline"></div>
+                <div class="result-eyebrow" id="resultEyebrow">MISSION REPORT</div>
+                <div id="resultCharacter" class="result-character">
+                    <div class="victory-halo"></div>
+                    <div class="pixel-character">
+                        <div class="char-hair"></div>
+                        <div class="char-face"></div>
+                        <div class="char-body"></div>
+                        <div class="char-arm left-arm"></div>
+                        <div class="char-arm right-arm"></div>
+                        <div class="char-leg left-leg"></div>
+                        <div class="char-leg right-leg"></div>
+                    </div>
+                </div>
+                <div id="resultDoor" class="result-door">
+                    <div class="result-door-inner"><span>EXIT</span><b>✦</b></div>
+                </div>
+                <div id="resultParticles" class="particles" aria-hidden="true"></div>
+                <h1 id="resultTitle">MISSION COMPLETE</h1>
+                <p id="resultMessage">Calculating your escape status...</p>
+                <div class="final-score-line">
+                    <strong id="finalScore">0</strong>
+                    <span>/ <span id="maxScore">120</span> POINTS</span>
+                </div>
+                <div class="result-meter"><div id="resultMeterFill"></div></div>
+                <div class="result-stats">
+                    <div><small>ACCURACY</small><strong id="resultAccuracy">0%</strong></div>
+                    <div><small>CORRECT ANSWERS</small><strong id="resultCorrect">0</strong></div>
+                    <div><small>MISSIONS</small><strong id="resultMissions">0/4</strong></div>
+                </div>
+                <div class="rank-box">
+                    <span>PLAYER RANK</span>
+                    <strong id="resultLevel">CYBER ROOKIE</strong>
+                    <p id="resultRecommendation"></p>
+                </div>
+                <div class="result-actions">
+                    <button class="primary-btn" id="playAgainBtn">↻ PLAY AGAIN</button>
+                    <button class="secondary-btn" id="resultsBackBtn">VIEW MISSIONS</button>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <footer>
+        <span>CYBERLAB © 2026</span>
+        <span>LEARN. DEFEND. ESCAPE.</span>
+    </footer>
+
+    <div id="toast" class="toast hidden" role="status"></div>
+    <script src="js/script.js"></script>
+</body>
+</html>
