@@ -1,32 +1,43 @@
 
 "use strict";
 
-const API_BASE_URL = "https://digital-safety-escape-room-api.onrender.com/api";
+/* =========================================================
+   DIGITAL SAFETY ESCAPE ROOM
+   Frontend game controller
+   ========================================================= */
+
+const API_BASE_URL =
+    "https://digital-safety-escape-room-api.onrender.com/api";
+
 const ESCAPE_TARGET = 90;
 
 const missionInfo = {
     phishing: {
         title: "Phishing Detection",
         icon: "🎣",
-        description: "Identify suspicious messages, fake websites, and attempts to steal your information.",
+        description:
+            "Identify suspicious messages, fake websites, and attempts to steal your information.",
         color: "#9b72ff"
     },
     password: {
         title: "Password Security",
         icon: "🔐",
-        description: "Defend accounts using strong passwords and secure authentication practices.",
+        description:
+            "Defend accounts using strong passwords and secure authentication practices.",
         color: "#48e0d0"
     },
     qr: {
         title: "Malicious QR Codes",
         icon: "▦",
-        description: "Recognize dangerous QR codes, suspicious links, and unsafe scanning requests.",
+        description:
+            "Recognize dangerous QR codes, suspicious links, and unsafe scanning requests.",
         color: "#ffbd69"
     },
     scam: {
         title: "Online Scam Awareness",
         icon: "🛡️",
-        description: "Avoid online fraud, impersonation, fake offers, and social engineering traps.",
+        description:
+            "Avoid online fraud, impersonation, fake offers, and social engineering traps.",
         color: "#51e6a0"
     }
 };
@@ -59,11 +70,30 @@ let selectedOption = null;
 let answerSubmitted = false;
 let sessionFinished = false;
 let toastTimer = null;
+let loadingChallenges = false;
+let submittingAnswer = false;
 
 let answeredQuestions = new Map();
 let correctQuestions = new Set();
 let earnedPoints = 0;
 let maximumPoints = 0;
+
+/* =========================================================
+   HELPERS
+   ========================================================= */
+
+function setText(id, value) {
+    const element = $(id);
+    if (element) element.textContent = String(value);
+}
+
+function setWidth(id, percentage) {
+    const element = $(id);
+    if (element) {
+        element.style.width =
+            `${Math.max(0, Math.min(100, percentage))}%`;
+    }
+}
 
 function normalizeCategory(category) {
     return String(category || "").toLowerCase().trim();
@@ -73,9 +103,27 @@ function identifyMission(category) {
     const value = normalizeCategory(category);
 
     if (value.includes("phish")) return "phishing";
-    if (value.includes("password") || value.includes("passcode")) return "password";
-    if (value.includes("qr") || value.includes("code scan")) return "qr";
-    if (value.includes("scam") || value.includes("fraud")) return "scam";
+
+    if (
+        value.includes("password") ||
+        value.includes("passcode")
+    ) {
+        return "password";
+    }
+
+    if (
+        value.includes("qr") ||
+        value.includes("code scan")
+    ) {
+        return "qr";
+    }
+
+    if (
+        value.includes("scam") ||
+        value.includes("fraud")
+    ) {
+        return "scam";
+    }
 
     return value.replace(/[^a-z0-9]+/g, "");
 }
@@ -86,7 +134,8 @@ function getMissionInfo(category) {
     return missionInfo[key] || {
         title: category || "Cybersecurity Challenge",
         icon: "🔒",
-        description: "Complete these cybersecurity challenges to progress toward the exit.",
+        description:
+            "Complete these cybersecurity challenges to progress toward the exit.",
         color: "#9b72ff"
     };
 }
@@ -108,42 +157,139 @@ function showToast(message) {
     ui.toast.classList.remove("hidden");
 
     clearTimeout(toastTimer);
+
     toastTimer = setTimeout(() => {
         ui.toast.classList.add("hidden");
     }, 3200);
 }
 
 function showSection(section) {
-    ui.missions.classList.toggle("hidden", section !== "missions");
-    ui.challengeArea.classList.toggle("hidden", section !== "challenge");
-    ui.results.classList.toggle("hidden", section !== "results");
+    if (ui.missions) {
+        ui.missions.classList.toggle(
+            "hidden",
+            section !== "missions"
+        );
+    }
 
-    window.scrollTo({ top: 0, behavior: "smooth" });
+    if (ui.challengeArea) {
+        ui.challengeArea.classList.toggle(
+            "hidden",
+            section !== "challenge"
+        );
+    }
+
+    if (ui.results) {
+        ui.results.classList.toggle(
+            "hidden",
+            section !== "results"
+        );
+    }
+
+    window.scrollTo({
+        top: 0,
+        behavior: "smooth"
+    });
 }
 
-async function loadChallenges() {
-    ui.loadError.classList.add("hidden");
-    ui.challengeGrid.innerHTML =
-        '<div class="loading-card">Connecting to the cybersecurity game server...</div>';
+function getPoints(challenge) {
+    const value = Number(challenge.points);
 
-    try {
-        const response = await fetch(`${API_BASE_URL}/challenges`);
+    return Number.isFinite(value) && value > 0
+        ? value
+        : 10;
+}
 
-        if (!response.ok) {
-            throw new Error(`Server returned status ${response.status}`);
+function parseOptions(value) {
+    if (Array.isArray(value)) return value;
+
+    if (typeof value === "string") {
+        try {
+            const parsed = JSON.parse(value);
+
+            if (Array.isArray(parsed)) return parsed;
+        } catch (_) {
+            // Use newline-separated options below.
         }
 
-        const data = await response.json();
+        return value
+            .split(/\r?\n/)
+            .map((item) => item.trim())
+            .filter(Boolean);
+    }
 
-        allChallenges = Array.isArray(data)
+    return [];
+}
+
+async function readResponse(response) {
+    const text = await response.text();
+
+    let data;
+
+    try {
+        data = text ? JSON.parse(text) : {};
+    } catch (_) {
+        throw new Error(
+            `The server returned an invalid response (HTTP ${response.status}).`
+        );
+    }
+
+    if (!response.ok) {
+        throw new Error(
+            data.error ||
+            data.message ||
+            `Server returned HTTP ${response.status}.`
+        );
+    }
+
+    return data;
+}
+
+/* =========================================================
+   LOAD CHALLENGES
+   ========================================================= */
+
+async function loadChallenges() {
+    if (loadingChallenges) return;
+
+    loadingChallenges = true;
+
+    if (ui.loadError) {
+        ui.loadError.classList.add("hidden");
+    }
+
+    if (ui.challengeGrid) {
+        ui.challengeGrid.innerHTML =
+            '<div class="loading-card">Connecting to the cybersecurity game server...</div>';
+    }
+
+    try {
+        // Use API_BASE_URL consistently.
+        const response = await fetch(
+            `${API_BASE_URL}/challenges`,
+            { method: "GET" }
+        );
+
+        const data = await readResponse(response);
+
+        const challenges = Array.isArray(data)
             ? data
-            : (data.challenges || data.data || []);
+            : (
+                data.challenges ||
+                data.data ||
+                []
+            );
 
-        if (!allChallenges.length) {
+        if (!Array.isArray(challenges) || challenges.length === 0) {
             throw new Error("The server returned no challenges.");
         }
 
-        allChallenges.sort((a, b) => Number(a.id) - Number(b.id));
+        allChallenges = challenges
+            .filter((challenge) => challenge && challenge.id != null)
+            .sort((a, b) => Number(a.id) - Number(b.id));
+
+        if (allChallenges.length === 0) {
+            throw new Error("No valid challenges were returned.");
+        }
 
         missionGroups = buildMissionGroups(allChallenges);
 
@@ -152,33 +298,48 @@ async function loadChallenges() {
             0
         );
 
-        $("missionCount").textContent = missionGroups.length;
-        $("challengeCount").textContent = allChallenges.length;
-        $("maximumScore").textContent = maximumPoints;
-        $("maxScore").textContent = maximumPoints;
-        $("liveMaxScore").textContent = `/ ${maximumPoints} POINTS`;
+        setText("missionCount", missionGroups.length);
+        setText("challengeCount", allChallenges.length);
+        setText("maximumScore", maximumPoints);
+        setText("maxScore", maximumPoints);
+        setText("liveMaxScore", `/ ${maximumPoints} POINTS`);
 
         renderMissionCards();
         updateOverallProgress();
+
+        console.info(
+            `Loaded ${allChallenges.length} challenges across ${missionGroups.length} missions.`
+        );
     } catch (error) {
         console.error("Unable to load challenges:", error);
 
-        ui.challengeGrid.innerHTML =
-            '<div class="loading-card">Unable to connect to the game server.</div>';
+        if (ui.challengeGrid) {
+            ui.challengeGrid.innerHTML =
+                '<div class="loading-card">Unable to load missions. Please retry.</div>';
+        }
 
-        ui.loadError.textContent =
-            `Could not load challenges: ${error.message}. ` +
-            "Check the backend URL and the Render service logs, then refresh.";
+        if (ui.loadError) {
+            ui.loadError.textContent =
+                `Could not load challenges: ${error.message}`;
 
-        ui.loadError.classList.remove("hidden");
+            ui.loadError.classList.remove("hidden");
+        }
+    } finally {
+        loadingChallenges = false;
     }
 }
+
+/* =========================================================
+   MISSION GROUPS AND CARDS
+   ========================================================= */
 
 function buildMissionGroups(challenges) {
     const groups = new Map();
 
     challenges.forEach((challenge) => {
-        const category = challenge.category || "General Cybersecurity";
+        const category =
+            challenge.category || "General Cybersecurity";
+
         const key = identifyMission(category);
 
         if (!groups.has(key)) {
@@ -196,23 +357,24 @@ function buildMissionGroups(challenges) {
     return [...groups.values()];
 }
 
-function getPoints(challenge) {
-    const value = Number(challenge.points);
-    return Number.isFinite(value) && value > 0 ? value : 10;
-}
-
 function getCompletedCount() {
     return answeredQuestions.size;
 }
 
 function getAccuracy() {
     if (!allChallenges.length) return 0;
-    return Math.round((correctQuestions.size / allChallenges.length) * 100);
+
+    return Math.round(
+        (correctQuestions.size / allChallenges.length) * 100
+    );
 }
 
 function getScorePercentage() {
     if (maximumPoints <= 0) return 0;
-    return Math.round((earnedPoints / maximumPoints) * 100);
+
+    return Math.round(
+        (earnedPoints / maximumPoints) * 100
+    );
 }
 
 function updateOverallProgress() {
@@ -222,33 +384,40 @@ function updateOverallProgress() {
         ? Math.round((answered / allChallenges.length) * 100)
         : 0;
 
-    $("overallPercentage").textContent = `${percentage}%`;
-    $("progressBar").style.width = `${percentage}%`;
+    setText("overallPercentage", `${percentage}%`);
+    setWidth("progressBar", percentage);
 
-    $("progressStatus").textContent =
-        `${answered} of ${allChallenges.length} challenges completed`;
+    setText(
+        "progressStatus",
+        `${answered} of ${allChallenges.length} challenges completed`
+    );
 
-    $("liveScore").textContent = earnedPoints;
+    setText("liveScore", earnedPoints);
 
-    $("escapeProgress").style.width =
-        `${Math.min(100, getScorePercentage())}%`;
+    setWidth("escapeProgress", getScorePercentage());
 
-    $("escapeProgressText").textContent =
-        `${getScorePercentage()}% score achieved`;
+    setText(
+        "escapeProgressText",
+        `${getScorePercentage()}% score achieved`
+    );
 
     renderMissionCards();
 }
 
 function renderMissionCards() {
+    if (!ui.challengeGrid) return;
+
     ui.challengeGrid.innerHTML = "";
 
     missionGroups.forEach((mission) => {
         const completed = mission.challenges.every(
-            challenge => answeredQuestions.has(Number(challenge.id))
+            (challenge) =>
+                answeredQuestions.has(Number(challenge.id))
         );
 
         const completedCount = mission.challenges.filter(
-            challenge => answeredQuestions.has(Number(challenge.id))
+            (challenge) =>
+                answeredQuestions.has(Number(challenge.id))
         ).length;
 
         const missionPoints = mission.challenges.reduce(
@@ -257,17 +426,24 @@ function renderMissionCards() {
         );
 
         const missionEarned = mission.challenges.reduce(
-            (sum, challenge) => sum + (
-                correctQuestions.has(Number(challenge.id))
-                    ? getPoints(challenge)
-                    : 0
-            ),
+            (sum, challenge) =>
+                sum + (
+                    correctQuestions.has(Number(challenge.id))
+                        ? getPoints(challenge)
+                        : 0
+                ),
             0
         );
 
         const card = document.createElement("article");
-        card.className = `mission-card${completed ? " completed" : ""}`;
-        card.style.setProperty("--mission-color", mission.info.color);
+
+        card.className =
+            `mission-card${completed ? " completed" : ""}`;
+
+        card.style.setProperty(
+            "--mission-color",
+            mission.info.color
+        );
 
         card.innerHTML = `
             <div class="mission-card-top">
@@ -288,13 +464,18 @@ function renderMissionCards() {
             </button>
         `;
 
-        card.querySelector("button").addEventListener("click", () => {
-            startMission(mission);
-        });
+        card.querySelector("button").addEventListener(
+            "click",
+            () => startMission(mission)
+        );
 
         ui.challengeGrid.appendChild(card);
     });
 }
+
+/* =========================================================
+   GAMEPLAY
+   ========================================================= */
 
 function startMission(mission) {
     if (!mission) {
@@ -305,7 +486,9 @@ function startMission(mission) {
     if (sessionFinished) resetGame();
 
     currentMission = mission;
-    currentQuestionIndex = findNextUnansweredIndex(mission);
+
+    currentQuestionIndex =
+        findNextUnansweredIndex(mission);
 
     if (currentQuestionIndex === -1) {
         currentQuestionIndex = 0;
@@ -317,7 +500,8 @@ function startMission(mission) {
 
 function findNextUnansweredIndex(mission) {
     return mission.challenges.findIndex(
-        challenge => !answeredQuestions.has(Number(challenge.id))
+        (challenge) =>
+            !answeredQuestions.has(Number(challenge.id))
     );
 }
 
@@ -325,6 +509,8 @@ function renderQuestion() {
     if (!currentMission) return;
 
     const challenges = currentMission.challenges;
+
+    if (!challenges.length) return;
 
     if (currentQuestionIndex >= challenges.length) {
         currentQuestionIndex = 0;
@@ -336,36 +522,62 @@ function renderQuestion() {
     selectedOption = null;
     answerSubmitted = answeredQuestions.has(id);
 
-    $("currentCategory").textContent =
-        `MISSION ${missionGroups.findIndex(m => m.key === currentMission.key) + 1}`;
+    const missionNumber =
+        missionGroups.findIndex(
+            (mission) => mission.key === currentMission.key
+        ) + 1;
 
-    $("currentMissionTitle").textContent = currentMission.info.title;
-    $("currentMissionDescription").textContent = currentMission.info.description;
+    setText("currentCategory", `MISSION ${missionNumber}`);
+    setText("currentMissionTitle", currentMission.info.title);
+    setText(
+        "currentMissionDescription",
+        currentMission.info.description
+    );
 
-    $("questionCounter").textContent =
-        `QUESTION ${currentQuestionIndex + 1} / ${challenges.length}`;
+    setText(
+        "questionCounter",
+        `QUESTION ${currentQuestionIndex + 1} / ${challenges.length}`
+    );
 
-    $("missionProgressText").textContent =
-        `${currentQuestionIndex + 1} of ${challenges.length} questions`;
+    setText(
+        "missionProgressText",
+        `${currentQuestionIndex + 1} of ${challenges.length} questions`
+    );
 
-    $("missionProgressBar").style.width =
-        `${((currentQuestionIndex + 1) / challenges.length) * 100}%`;
+    setWidth(
+        "missionProgressBar",
+        ((currentQuestionIndex + 1) / challenges.length) * 100
+    );
 
-    $("questionScenario").textContent =
-        challenge.scenario || "Review the situation and choose the safest response.";
+    setText(
+        "questionScenario",
+        challenge.scenario ||
+        "Review the situation and choose the safest response."
+    );
 
-    $("questionTitle").textContent = "YOUR DECISION";
-    $("questionText").textContent = challenge.question || "Choose the best answer.";
+    setText("questionTitle", "YOUR DECISION");
+    setText(
+        "questionText",
+        challenge.question || "Choose the best answer."
+    );
+
+    if (!ui.options || !ui.feedback || !ui.hint || !ui.next) {
+        console.error("One or more gameplay HTML elements are missing.");
+        return;
+    }
 
     ui.options.innerHTML = "";
     ui.feedback.className = "feedback-box hidden";
     ui.feedback.textContent = "";
-    ui.hint.textContent = "Select one answer, then submit your decision.";
+
+    ui.hint.textContent =
+        "Select one answer, then submit your decision.";
 
     const options = parseOptions(challenge.options);
 
     options.forEach((option, index) => {
         const button = document.createElement("button");
+
         button.type = "button";
         button.className = "option-btn";
 
@@ -375,13 +587,14 @@ function renderQuestion() {
         `;
 
         button.addEventListener("click", () => {
-            if (answerSubmitted) return;
+            if (answerSubmitted || submittingAnswer) return;
 
             selectedOption = index;
 
-            ui.options.querySelectorAll(".option-btn").forEach((item) => {
-                item.classList.remove("selected");
-            });
+            ui.options.querySelectorAll(".option-btn")
+                .forEach((item) => {
+                    item.classList.remove("selected");
+                });
 
             button.classList.add("selected");
             ui.next.disabled = false;
@@ -397,45 +610,36 @@ function renderQuestion() {
         showPreviouslyAnswered(challenge);
     }
 
-    ui.next.disabled = !answerSubmitted && selectedOption === null;
+    ui.next.disabled =
+        !answerSubmitted && selectedOption === null;
 
     ui.next.textContent = answerSubmitted
-        ? (currentQuestionIndex === challenges.length - 1
-            ? "FINISH MISSION →"
-            : "NEXT QUESTION →")
+        ? (
+            currentQuestionIndex === challenges.length - 1
+                ? "FINISH MISSION →"
+                : "NEXT QUESTION →"
+        )
         : "SUBMIT ANSWER →";
 
     updateOverallProgress();
-}
-
-function parseOptions(value) {
-    if (Array.isArray(value)) return value;
-
-    if (typeof value === "string") {
-        try {
-            const parsed = JSON.parse(value);
-            if (Array.isArray(parsed)) return parsed;
-        } catch (_) {
-            // Fall back to newline-separated options.
-        }
-
-        return value.split(/\r?\n/).map(item => item.trim()).filter(Boolean);
-    }
-
-    return [];
 }
 
 function showPreviouslyAnswered(challenge) {
     const id = Number(challenge.id);
     const wasCorrect = correctQuestions.has(id);
 
-    ui.options.querySelectorAll(".option-btn").forEach((button, index) => {
-        button.disabled = true;
+    if (!ui.options || !ui.feedback || !ui.hint) return;
 
-        if (index === answeredQuestions.get(id)) {
-            button.classList.add(wasCorrect ? "correct-option" : "wrong-option");
-        }
-    });
+    ui.options.querySelectorAll(".option-btn")
+        .forEach((button, index) => {
+            button.disabled = true;
+
+            if (index === answeredQuestions.get(id)) {
+                button.classList.add(
+                    wasCorrect ? "correct-option" : "wrong-option"
+                );
+            }
+        });
 
     ui.feedback.className =
         `feedback-box ${wasCorrect ? "correct" : "incorrect"}`;
@@ -444,13 +648,26 @@ function showPreviouslyAnswered(challenge) {
         ? "✓ Correct answer. Your points have been recorded."
         : "✗ This question was answered incorrectly. You can replay the game after finishing.";
 
-    ui.hint.textContent = "This question has already been answered in this attempt.";
+    ui.hint.textContent =
+        "This question has already been answered in this attempt.";
 }
 
-async function submitAnswer() {
-    if (!currentMission || sessionFinished) return;
+/* =========================================================
+   ANSWER SUBMISSION
+   ========================================================= */
 
-    const challenge = currentMission.challenges[currentQuestionIndex];
+async function submitAnswer() {
+    if (
+        !currentMission ||
+        sessionFinished ||
+        submittingAnswer
+    ) {
+        return;
+    }
+
+    const challenge =
+        currentMission.challenges[currentQuestionIndex];
+
     const id = Number(challenge.id);
 
     if (answerSubmitted) {
@@ -463,92 +680,144 @@ async function submitAnswer() {
         return;
     }
 
-    ui.next.disabled = true;
-    ui.next.textContent = "CHECKING ANSWER...";
+    submittingAnswer = true;
+
+    if (ui.next) {
+        ui.next.disabled = true;
+        ui.next.textContent = "CHECKING ANSWER...";
+    }
 
     try {
-        const response = await fetch(`${API_BASE_URL}/submit-answer`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-                challenge_id: id,
-                selected_option: selectedOption
-            })
-        });
+        // Use API_BASE_URL consistently for answer submission too.
+        const response = await fetch(
+            `${API_BASE_URL}/submit-answer`,
+            {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify({
+                    challenge_id: id,
+                    selected_option: selectedOption
+                })
+            }
+        );
 
-        const result = await response.json();
-
-        if (!response.ok) {
-            throw new Error(
-                result.error || result.message || "Answer submission failed."
-            );
-        }
+        const result = await readResponse(response);
 
         const correct = Boolean(
-            result.is_correct ?? result.correct ?? result.success
+            result.is_correct ??
+            result.correct ??
+            result.success
         );
 
         answerSubmitted = true;
         answeredQuestions.set(id, selectedOption);
 
         const pointsEarned = Number(
-            result.points_earned ?? result.points ?? getPoints(challenge)
+            result.points_earned ??
+            result.points ??
+            getPoints(challenge)
         );
 
         if (correct) {
             correctQuestions.add(id);
-            earnedPoints += Number.isFinite(pointsEarned) ? pointsEarned : getPoints(challenge);
 
-            ui.feedback.className = "feedback-box correct";
-            ui.feedback.textContent =
-                `✓ CORRECT! +${pointsEarned} points. ` +
-                (result.explanation || "Great work. Keep going!");
+            earnedPoints +=
+                Number.isFinite(pointsEarned)
+                    ? pointsEarned
+                    : getPoints(challenge);
+
+            if (ui.feedback) {
+                ui.feedback.className = "feedback-box correct";
+                ui.feedback.textContent =
+                    `✓ CORRECT! +${pointsEarned} points. ` +
+                    (
+                        result.explanation ||
+                        "Great work. Keep going!"
+                    );
+            }
 
             showToast("Correct answer! Points earned.");
         } else {
             correctQuestions.delete(id);
 
-            ui.feedback.className = "feedback-box incorrect";
-            ui.feedback.textContent =
-                "✗ Not quite right. " +
-                (result.explanation || "Review the situation carefully.");
+            if (ui.feedback) {
+                ui.feedback.className = "feedback-box incorrect";
+                ui.feedback.textContent =
+                    "✗ Not quite right. " +
+                    (
+                        result.explanation ||
+                        "Review the situation carefully."
+                    );
+            }
 
             showToast("Incorrect answer. Keep learning.");
         }
 
-        ui.options.querySelectorAll(".option-btn").forEach((button, index) => {
-            button.disabled = true;
+        if (ui.options) {
+            ui.options.querySelectorAll(".option-btn")
+                .forEach((button, index) => {
+                    button.disabled = true;
 
-            if (index === selectedOption) {
-                button.classList.add(correct ? "correct-option" : "wrong-option");
-            }
-        });
+                    if (index === selectedOption) {
+                        button.classList.add(
+                            correct
+                                ? "correct-option"
+                                : "wrong-option"
+                        );
+                    }
+                });
+        }
 
-        ui.hint.textContent = correct
-            ? "Decision accepted. You have moved one step closer to the exit."
-            : "Decision recorded. Finish the missions to see your final result.";
+        if (ui.hint) {
+            ui.hint.textContent = correct
+                ? "Decision accepted. You have moved one step closer to the exit."
+                : "Decision recorded. Finish the missions to see your final result.";
+        }
 
-        ui.next.textContent =
-            currentQuestionIndex === currentMission.challenges.length - 1
-                ? "FINISH MISSION →"
-                : "NEXT QUESTION →";
+        if (ui.next) {
+            ui.next.textContent =
+                currentQuestionIndex ===
+                currentMission.challenges.length - 1
+                    ? "FINISH MISSION →"
+                    : "NEXT QUESTION →";
+        }
 
         updateOverallProgress();
-        ui.next.disabled = false;
     } catch (error) {
         console.error("Answer submission error:", error);
 
-        ui.feedback.className = "feedback-box incorrect";
-        ui.feedback.textContent =
-            `Unable to submit this answer: ${error.message}. Try again.`;
+        if (ui.feedback) {
+            ui.feedback.className = "feedback-box incorrect";
+            ui.feedback.textContent =
+                `Unable to submit this answer: ${error.message}. Try again.`;
+        }
 
-        ui.next.disabled = false;
-        ui.next.textContent = "TRY SUBMITTING AGAIN →";
+        if (ui.next) {
+            ui.next.disabled = false;
+            ui.next.textContent = "TRY SUBMITTING AGAIN →";
+        }
+
         answerSubmitted = false;
+    } finally {
+        submittingAnswer = false;
+
+        if (ui.next && !answerSubmitted) {
+            ui.next.disabled = selectedOption === null;
+        } else if (ui.next) {
+            ui.next.disabled = false;
+        }
     }
 }
 
+/* =========================================================
+   QUESTION NAVIGATION
+   ========================================================= */
+
 function moveToNextQuestion() {
+    if (!currentMission) return;
+
     const challenges = currentMission.challenges;
 
     if (currentQuestionIndex < challenges.length - 1) {
@@ -557,20 +826,28 @@ function moveToNextQuestion() {
         return;
     }
 
-    const nextMission = missionGroups.find(mission =>
+    const nextMission = missionGroups.find((mission) =>
         mission.challenges.some(
-            challenge => !answeredQuestions.has(Number(challenge.id))
+            (challenge) =>
+                !answeredQuestions.has(Number(challenge.id))
         )
     );
 
     if (nextMission) {
-        showToast(`${currentMission.info.title} completed. Next mission unlocked!`);
+        showToast(
+            `${currentMission.info.title} completed. Next mission unlocked!`
+        );
+
         startMission(nextMission);
         return;
     }
 
     finishGame();
 }
+
+/* =========================================================
+   RESULTS
+   ========================================================= */
 
 function finishGame() {
     sessionFinished = true;
@@ -582,38 +859,68 @@ function finishGame() {
     showSection("results");
 
     const scene = $("resultScene");
-    scene.classList.remove("victory", "failure");
-    scene.classList.add(escaped ? "victory" : "failure");
 
-    $("resultEyebrow").textContent =
-        escaped ? "ESCAPE PROTOCOL // SUCCESS" : "ESCAPE PROTOCOL // FAILED";
+    if (scene) {
+        scene.classList.remove("victory", "failure");
+        scene.classList.add(
+            escaped ? "victory" : "failure"
+        );
+    }
 
-    $("resultTitle").textContent =
-        escaped ? "YOU ESCAPED!" : "STILL TRAPPED!";
+    setText(
+        "resultEyebrow",
+        escaped
+            ? "ESCAPE PROTOCOL // SUCCESS"
+            : "ESCAPE PROTOCOL // FAILED"
+    );
 
-    $("resultMessage").textContent = escaped
-        ? "The security door unlocks. You proved your cybersecurity skills."
-        : `Your score is ${scorePercentage}%. You need at least ${ESCAPE_TARGET}% to escape. Review what you learned and try again.`;
+    setText(
+        "resultTitle",
+        escaped ? "YOU ESCAPED!" : "STILL TRAPPED!"
+    );
 
-    $("finalScore").textContent = earnedPoints;
-    $("maxScore").textContent = maximumPoints;
-    $("resultAccuracy").textContent = `${accuracy}%`;
-    $("resultCorrect").textContent = `${correctQuestions.size}/${allChallenges.length}`;
+    setText(
+        "resultMessage",
+        escaped
+            ? "The security door unlocks. You proved your cybersecurity skills."
+            : `Your score is ${scorePercentage}%. You need at least ${ESCAPE_TARGET}% to escape. Review what you learned and try again.`
+    );
 
-    $("resultMissions").textContent =
-        `${missionGroups.filter(mission =>
-            mission.challenges.every(challenge =>
-                answeredQuestions.has(Number(challenge.id))
+    setText("finalScore", earnedPoints);
+    setText("maxScore", maximumPoints);
+    setText("resultAccuracy", `${accuracy}%`);
+
+    setText(
+        "resultCorrect",
+        `${correctQuestions.size}/${allChallenges.length}`
+    );
+
+    const completedMissions = missionGroups.filter(
+        (mission) =>
+            mission.challenges.every(
+                (challenge) =>
+                    answeredQuestions.has(Number(challenge.id))
             )
-        ).length}/${missionGroups.length}`;
+    ).length;
 
-    $("resultLevel").textContent = getRank(scorePercentage, escaped);
+    setText(
+        "resultMissions",
+        `${completedMissions}/${missionGroups.length}`
+    );
 
-    $("resultRecommendation").textContent = escaped
-        ? "Excellent work. Keep applying these digital safety habits online."
-        : "Review the explanations, learn from incorrect answers, and replay the escape room.";
+    setText(
+        "resultLevel",
+        getRank(scorePercentage, escaped)
+    );
 
-    $("resultMeterFill").style.width = `${Math.min(scorePercentage, 100)}%`;
+    setText(
+        "resultRecommendation",
+        escaped
+            ? "Excellent work. Keep applying these digital safety habits online."
+            : "Review the explanations, learn from incorrect answers, and replay the escape room."
+    );
+
+    setWidth("resultMeterFill", scorePercentage);
 
     createVictoryParticles(escaped);
 }
@@ -622,80 +929,130 @@ function getRank(percentage, escaped) {
     if (!escaped) return "CYBER ROOKIE";
     if (percentage >= 100) return "CYBER LEGEND";
     if (percentage >= 95) return "CYBER MASTER";
+
     return "CYBER EXPERT";
 }
 
 function createVictoryParticles(escaped) {
     const container = $("resultParticles");
+
+    if (!container) return;
+
     container.innerHTML = "";
 
     if (!escaped) return;
 
     for (let i = 0; i < 42; i++) {
         const particle = document.createElement("span");
+
         particle.className = "particle";
 
-        particle.style.setProperty("--dx", `${Math.random() * 600 - 300}px`);
-        particle.style.setProperty("--dy", `${Math.random() * 440 - 220}px`);
-        particle.style.animationDelay = `${Math.random() * 0.8}s`;
+        particle.style.setProperty(
+            "--dx",
+            `${Math.random() * 600 - 300}px`
+        );
 
-        if (i % 3 === 0) particle.style.background = "#48e0d0";
-        if (i % 3 === 1) particle.style.background = "#9b72ff";
+        particle.style.setProperty(
+            "--dy",
+            `${Math.random() * 440 - 220}px`
+        );
+
+        particle.style.animationDelay =
+            `${Math.random() * 0.8}s`;
+
+        if (i % 3 === 0) {
+            particle.style.background = "#48e0d0";
+        } else if (i % 3 === 1) {
+            particle.style.background = "#9b72ff";
+        }
 
         container.appendChild(particle);
     }
 }
 
+/* =========================================================
+   RESET AND START
+   ========================================================= */
+
 function resetGame() {
     answeredQuestions = new Map();
     correctQuestions = new Set();
     earnedPoints = 0;
+
     sessionFinished = false;
     currentMission = null;
     currentQuestionIndex = 0;
     selectedOption = null;
     answerSubmitted = false;
+    submittingAnswer = false;
 
     updateOverallProgress();
     showSection("missions");
+
     showToast("New game started. Good luck!");
 }
 
 function beginGame() {
     if (!allChallenges.length) {
         showToast("Challenges are still loading. Try again in a moment.");
+        loadChallenges();
         return;
     }
 
-    if (sessionFinished) resetGame();
+    if (sessionFinished) {
+        resetGame();
+    }
 
-    const firstUnanswered = missionGroups.find(mission =>
-        mission.challenges.some(
-            challenge => !answeredQuestions.has(Number(challenge.id))
-        )
+    const firstUnanswered = missionGroups.find(
+        (mission) =>
+            mission.challenges.some(
+                (challenge) =>
+                    !answeredQuestions.has(Number(challenge.id))
+            )
     );
 
     startMission(firstUnanswered || missionGroups[0]);
 }
 
-ui.start.addEventListener("click", beginGame);
-ui.next.addEventListener("click", submitAnswer);
+/* =========================================================
+   EVENT LISTENERS
+   ========================================================= */
 
-ui.back.addEventListener("click", () => {
-    showSection("missions");
-    renderMissionCards();
-});
+if (ui.start) {
+    ui.start.addEventListener("click", beginGame);
+}
 
-ui.resultsBack.addEventListener("click", () => {
-    showSection("missions");
-    renderMissionCards();
-});
+if (ui.next) {
+    ui.next.addEventListener("click", submitAnswer);
+}
 
-ui.playAgain.addEventListener("click", resetGame);
+if (ui.back) {
+    ui.back.addEventListener("click", () => {
+        showSection("missions");
+        renderMissionCards();
+    });
+}
 
-ui.home.addEventListener("click", (event) => {
-    event.preventDefault();
-    showSection("missions");
-});
+if (ui.resultsBack) {
+    ui.resultsBack.addEventListener("click", () => {
+        showSection("missions");
+        renderMissionCards();
+    });
+}
+
+if (ui.playAgain) {
+    ui.playAgain.addEventListener("click", resetGame);
+}
+
+if (ui.home) {
+    ui.home.addEventListener("click", (event) => {
+        event.preventDefault();
+        showSection("missions");
+    });
+}
+
+/* =========================================================
+   START APPLICATION
+   ========================================================= */
 
 loadChallenges();
