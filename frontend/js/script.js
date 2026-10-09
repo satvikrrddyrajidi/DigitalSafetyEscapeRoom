@@ -1,6 +1,6 @@
 "use strict";
 
-const API_BASE = "http://127.0.0.1:5000/api";
+const API_BASE_URL = "https://digital-safety-escape-room-api.onrender.com/api";
 const ESCAPE_TARGET = 90;
 
 const missionInfo = {
