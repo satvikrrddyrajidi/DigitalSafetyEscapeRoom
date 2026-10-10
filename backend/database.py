@@ -1,202 +1,214 @@
-
 import json
 import sqlite3
 from pathlib import Path
 
 DATABASE_PATH = Path(__file__).resolve().parent / "database.db"
 
+# Correct option indexes: A = 0, B = 1, C = 2, D = 3
 SEED_CHALLENGES = [
     {
+        "id": 1,
         "category": "Phishing",
-        "title": "The Urgent Email",
-        "scenario": "You receive an email claiming your college account will be suspended in 10 minutes unless you verify your password using a link.",
-        "question": "What is the safest action?",
-        "options": [
-            "Click the link and enter your password quickly",
-            "Reply with your password to confirm your identity",
-            "Open the official college website independently and verify the alert",
-            "Forward the email to all your classmates"
-        ],
-        "correct_option": 2,
-        "explanation": "Urgency and threats are common phishing tactics. Visit the official website independently instead of using a link in a suspicious message.",
-        "points": 10,
-        "difficulty": "Easy"
-    },
-    {
-        "category": "Phishing",
-        "title": "The Strange Sender",
-        "scenario": "A message appears to come from your bank, but the sender address contains extra characters and spelling mistakes.",
-        "question": "Which detail is the strongest warning sign?",
-        "options": [
-            "The message uses your first name",
-            "The sender address does not match the bank's genuine domain",
-            "The message arrived in the morning",
-            "The email contains a greeting"
-        ],
-        "correct_option": 1,
-        "explanation": "Attackers often use lookalike domains to impersonate trusted organizations.",
-        "points": 10,
-        "difficulty": "Easy"
-    },
-    {
-        "category": "Phishing",
-        "title": "The Unexpected Attachment",
-        "scenario": "An unknown sender emails an attachment named College_Result.exe and asks you to open it immediately.",
-        "question": "What should you do?",
-        "options": [
-            "Open it to check your result",
-            "Rename the file and open it",
-            "Send it to your friends first",
-            "Do not open it; verify the sender through a trusted channel"
-        ],
-        "correct_option": 3,
-        "explanation": "Unexpected executable attachments may contain malware. Verify the sender through official channels.",
-        "points": 10,
-        "difficulty": "Medium"
-    },
-    {
-        "category": "Password Security",
-        "title": "The Reused Password",
-        "scenario": "You use the same password for email, social media, and your college portal. One website reports a data breach.",
-        "question": "What is the best way to protect your other accounts?",
-        "options": [
-            "Keep the same password everywhere",
-            "Change it only if someone contacts you",
-            "Use unique passwords for each account and change exposed ones",
-            "Write your password in a public profile"
-        ],
-        "correct_option": 2,
-        "explanation": "Unique passwords reduce the risk of attackers using leaked credentials on other websites.",
-        "points": 10,
-        "difficulty": "Easy"
-    },
-    {
-        "category": "Password Security",
-        "title": "The Verification Code",
-        "scenario": "Someone claiming to be technical support calls you and asks for a one-time password sent to your phone.",
-        "question": "What should you do?",
-        "options": [
-            "Share it because the caller sounds professional",
-            "Never share the code and independently contact official support",
-            "Send it through chat",
-            "Share it if the caller knows your name"
-        ],
-        "correct_option": 1,
-        "explanation": "Never disclose one-time passwords or authentication codes to callers.",
-        "points": 10,
-        "difficulty": "Medium"
-    },
-    {
-        "category": "Password Security",
-        "title": "Building a Strong Password",
-        "scenario": "You are creating a password for an important personal account.",
-        "question": "Which approach is generally the safest?",
-        "options": [
-            "Use your birth date and first name",
-            "Use password123",
-            "Use the same short password everywhere",
-            "Use a long, unique password or passphrase, ideally stored in a password manager"
-        ],
-        "correct_option": 3,
-        "explanation": "Long, unique passwords or passphrases help protect accounts against guessing and password reuse.",
-        "points": 10,
-        "difficulty": "Easy"
-    },
-    {
-        "category": "Malicious QR Codes",
-        "title": "The Parking QR Code",
-        "scenario": "A QR code sticker on a parking meter directs you to a payment page with an unfamiliar web address.",
-        "question": "What should you do before paying?",
-        "options": [
-            "Check the destination address and use the official payment method if anything seems suspicious",
-            "Enter your card details immediately",
-            "Assume QR codes are always safe",
-            "Share the QR code with strangers"
-        ],
-        "correct_option": 0,
-        "explanation": "QR codes can lead to fraudulent websites. Inspect the destination before paying.",
-        "points": 10,
-        "difficulty": "Medium"
-    },
-    {
-        "category": "Malicious QR Codes",
-        "title": "The Free Wi-Fi QR",
-        "scenario": "A public Wi-Fi QR code opens a page requesting your email password.",
-        "question": "What is the safest decision?",
-        "options": [
-            "Enter your email password",
-            "Use your banking password",
-            "Avoid entering sensitive credentials and verify the network with staff",
-            "Disable your phone security"
-        ],
-        "correct_option": 2,
-        "explanation": "A Wi-Fi sign-in page should not need your unrelated email password.",
-        "points": 10,
-        "difficulty": "Medium"
-    },
-    {
-        "category": "Malicious QR Codes",
-        "title": "The Fake Delivery Notice",
-        "scenario": "An unexpected delivery QR code opens a website asking for a small fee and your card details.",
-        "question": "How should you verify the delivery request?",
-        "options": [
-            "Pay immediately",
-            "Check the delivery through the courier's official app or website",
-            "Enter card details on any page",
-            "Share your banking PIN"
-        ],
-        "correct_option": 1,
-        "explanation": "Check shipment details using the courier's verified website or app.",
-        "points": 10,
-        "difficulty": "Medium"
-    },
-    {
-        "category": "Online Scams",
-        "title": "The Too-Good-To-Be-True Offer",
-        "scenario": "A social media account offers an expensive phone at a 90% discount if you immediately transfer money to a personal account.",
+        "difficulty": "Easy",
+        "title": "Urgent Bank Verification",
+        "scenario": "You receive an email claiming your bank account will be suspended within 30 minutes unless you click a verification link.",
         "question": "What is the safest response?",
         "options": [
-            "Transfer money before the offer expires",
-            "Trust the account because it has a logo",
-            "Send identity documents to reserve the offer",
-            "Verify the seller independently and avoid suspicious advance payments"
-        ],
-        "correct_option": 3,
-        "explanation": "Extreme discounts and pressure to pay immediately are common scam indicators.",
-        "points": 10,
-        "difficulty": "Easy"
-    },
-    {
-        "category": "Online Scams",
-        "title": "The Fake Job Offer",
-        "scenario": "A recruiter promises a high-paying job without an interview but demands a registration fee.",
-        "question": "What should you do?",
-        "options": [
-            "Pay quickly",
-            "Verify the company and recruiter through official channels; do not pay suspicious fees",
-            "Send your banking password",
-            "Borrow money to pay the recruiter"
-        ],
-        "correct_option": 1,
-        "explanation": "Requests for upfront job fees can indicate recruitment fraud.",
-        "points": 10,
-        "difficulty": "Medium"
-    },
-    {
-        "category": "Online Scams",
-        "title": "The Impersonation Message",
-        "scenario": "An account using your friend's photo urgently asks you to send money.",
-        "question": "What is the best first step?",
-        "options": [
-            "Send money immediately",
-            "Post your bank details in the chat",
-            "Call your friend using a known number to verify the request",
-            "Forward the request to everyone"
+            "Click the link immediately and verify the account.",
+            "Reply to the email asking the sender to confirm it.",
+            "Do not click the link. Open the bank's official app or website independently.",
+            "Forward the email to friends to ask whether it is legitimate."
         ],
         "correct_option": 2,
-        "explanation": "Verify urgent financial requests through a separate, trusted communication channel.",
-        "points": 10,
-        "difficulty": "Easy"
+        "explanation": "Urgency and threats are common phishing tactics. Open the bank's official app or website independently.",
+        "points": 10
+    },
+    {
+        "id": 2,
+        "category": "Phishing",
+        "difficulty": "Easy",
+        "title": "Suspicious Login Alert",
+        "scenario": "A message says someone attempted to log into your social media account. It contains a 'Secure My Account' button.",
+        "question": "What should you do first?",
+        "options": [
+            "Click the button immediately.",
+            "Open the official social media website or app separately and check account security.",
+            "Send your password to the sender for verification.",
+            "Ignore all future security alerts."
+        ],
+        "correct_option": 1,
+        "explanation": "Open the official app or website directly and review your account activity.",
+        "points": 10
+    },
+    {
+        "id": 3,
+        "category": "Phishing",
+        "difficulty": "Medium",
+        "title": "Fake Internship Email",
+        "scenario": "You receive an internship email from an unknown recruiter. The message asks you to download an attachment and enable macros before viewing the document.",
+        "question": "What is the safest decision?",
+        "options": [
+            "Enable macros because the email looks professional.",
+            "Download the file and scan it after enabling macros.",
+            "Do not enable macros or open the attachment unless the sender and file are independently verified.",
+            "Send the attachment to classmates to check it."
+        ],
+        "correct_option": 2,
+        "explanation": "Unexpected attachments and requests to enable macros can be dangerous. Verify the recruiter and file through trusted channels.",
+        "points": 10
+    },
+    {
+        "id": 4,
+        "category": "Password Security",
+        "difficulty": "Easy",
+        "title": "Strong Password",
+        "scenario": "You are creating a password for an online banking account and want it to be resistant to guessing and automated attacks.",
+        "question": "Which password is strongest?",
+        "options": [
+            "satvik123",
+            "password2026",
+            "R7!qZ#91@Lm$4x",
+            "mybirthday2005"
+        ],
+        "correct_option": 2,
+        "explanation": "A long, random, unique password is harder to guess. Do not reuse it on other accounts.",
+        "points": 10
+    },
+    {
+        "id": 5,
+        "category": "Password Security",
+        "difficulty": "Medium",
+        "title": "Password Reuse",
+        "scenario": "You use the same password for your email, gaming account, social media account, and college portal because it is easier to remember.",
+        "question": "What is the biggest security risk?",
+        "options": [
+            "The password will become too long.",
+            "If one service is breached, attackers may try the same password on your other accounts.",
+            "Websites will automatically delete the password.",
+            "Using one password improves account security."
+        ],
+        "correct_option": 1,
+        "explanation": "Password reuse enables attackers to try leaked credentials on your other accounts. Use unique passwords.",
+        "points": 10
+    },
+    {
+        "id": 6,
+        "category": "Password Security",
+        "difficulty": "Easy",
+        "title": "Multi-Factor Authentication",
+        "scenario": "Your email provider offers multi-factor authentication. After entering your password, you must also approve a login through an authenticator app.",
+        "question": "Why is MFA useful?",
+        "options": [
+            "It makes passwords unnecessary in every situation.",
+            "It provides an additional verification factor beyond the password.",
+            "It guarantees that phishing attacks cannot happen.",
+            "It prevents the account from being accessed from a phone."
+        ],
+        "correct_option": 1,
+        "explanation": "MFA adds another verification step, making access harder for someone who only knows your password.",
+        "points": 10
+    },
+    {
+        "id": 7,
+        "category": "Malicious QR Codes",
+        "difficulty": "Easy",
+        "title": "Free Shopping Voucher",
+        "scenario": "A poster in a public place advertises a free shopping voucher. A QR code asks you to scan it and enter your banking credentials.",
+        "question": "What is the safest action?",
+        "options": [
+            "Scan it and enter the requested banking information.",
+            "Scan it because the poster looks professionally designed.",
+            "Do not scan it. Verify the offer through the company's official website.",
+            "Share the QR code with friends first."
+        ],
+        "correct_option": 2,
+        "explanation": "A QR code can lead to a fake website. Never enter banking credentials to claim an unverified offer.",
+        "points": 10
+    },
+    {
+        "id": 8,
+        "category": "Malicious QR Codes",
+        "difficulty": "Medium",
+        "title": "Parking Payment QR",
+        "scenario": "You find a QR sticker placed over the original parking payment QR code. It redirects you to a website asking for card details.",
+        "question": "What should you do?",
+        "options": [
+            "Enter the card details because parking payments are normal.",
+            "Use the official parking application or independently verify the payment location.",
+            "Take a screenshot and send it to strangers online.",
+            "Disable your phone's security features."
+        ],
+        "correct_option": 1,
+        "explanation": "A sticker may replace a legitimate QR code with a fraudulent destination. Use an official payment method.",
+        "points": 10
+    },
+    {
+        "id": 9,
+        "category": "Malicious QR Codes",
+        "difficulty": "Medium",
+        "title": "QR Login Request",
+        "scenario": "A QR code sent through an unknown message claims that scanning it will instantly log you into your account on another device.",
+        "question": "What should you consider before scanning?",
+        "options": [
+            "QR codes are always safe because they contain no text.",
+            "Verify the source and destination before scanning because QR codes can lead to malicious websites.",
+            "Scan it immediately if it promises convenience.",
+            "Give the sender your password after scanning."
+        ],
+        "correct_option": 1,
+        "explanation": "QR codes can lead to malicious websites or risky login flows. Only use codes from trusted sources.",
+        "points": 10
+    },
+    {
+        "id": 10,
+        "category": "Online Scams",
+        "difficulty": "Easy",
+        "title": "Lottery Processing Fee",
+        "scenario": "You receive a message claiming you have won ₹50,000. To receive the prize, you must first pay ₹2,000 as a processing fee.",
+        "question": "What should you do?",
+        "options": [
+            "Pay the fee immediately.",
+            "Send your bank details so the prize can be transferred.",
+            "Ignore the message and verify the claim through an official source.",
+            "Forward the message to other people."
+        ],
+        "correct_option": 2,
+        "explanation": "Unexpected prizes that require upfront payment are a common scam pattern. Verify the claim independently.",
+        "points": 10
+    },
+    {
+        "id": 11,
+        "category": "Online Scams",
+        "difficulty": "Easy",
+        "title": "Fake Customer Support",
+        "scenario": "You search online for customer support and find a social media account offering to fix your banking problem. The account asks for your OTP.",
+        "question": "What should you do?",
+        "options": [
+            "Share the OTP because they claim to be support staff.",
+            "Share only the last four digits of the OTP.",
+            "Do not share the OTP. Contact the organization through its official support channel.",
+            "Post the OTP publicly so support can see it."
+        ],
+        "correct_option": 2,
+        "explanation": "Never share OTPs or authentication codes. Contact the organization using its official support channel.",
+        "points": 10
+    },
+    {
+        "id": 12,
+        "category": "Online Scams",
+        "difficulty": "Easy",
+        "title": "Investment Opportunity",
+        "scenario": "A stranger promises to double your money in two days if you transfer funds to a private account immediately.",
+        "question": "Which warning sign is most obvious?",
+        "options": [
+            "The promise of guaranteed high returns with urgent payment.",
+            "The message uses a smartphone.",
+            "The sender uses a profile picture.",
+            "The investment discussion happens online."
+        ],
+        "correct_option": 0,
+        "explanation": "Guaranteed unusually high returns and pressure to transfer money immediately are major fraud warning signs.",
+        "points": 10
     }
 ]
 
@@ -208,7 +220,7 @@ def get_connection():
 
 
 def initialize_database():
-    """Create or safely upgrade the database without deleting existing records."""
+    """Create the table and synchronize the built-in challenges by ID."""
     with get_connection() as connection:
         connection.execute("""
             CREATE TABLE IF NOT EXISTS challenges (
@@ -232,20 +244,24 @@ def initialize_database():
             ).fetchall()
         }
 
-        # Add optional columns missing from an older database.
         if "points" not in columns:
             connection.execute("""
                 ALTER TABLE challenges
                 ADD COLUMN points INTEGER NOT NULL DEFAULT 10
             """)
-            columns.add("points")
 
         if "difficulty" not in columns:
             connection.execute("""
                 ALTER TABLE challenges
                 ADD COLUMN difficulty TEXT NOT NULL DEFAULT 'Medium'
             """)
-            columns.add("difficulty")
+
+        columns = {
+            row["name"]
+            for row in connection.execute(
+                "PRAGMA table_info(challenges)"
+            ).fetchall()
+        }
 
         required_columns = {
             "id", "category", "title", "scenario", "question",
@@ -256,36 +272,50 @@ def initialize_database():
         missing = required_columns - columns
         if missing:
             raise RuntimeError(
-                f"Database is missing required columns: {sorted(missing)}. "
-                "Existing records have not been deleted."
+                f"Database is missing required columns: {sorted(missing)}"
             )
 
-        count = connection.execute(
-            "SELECT COUNT(*) FROM challenges"
-        ).fetchone()[0]
+        for item in SEED_CHALLENGES:
+            values = (
+                item["category"],
+                item["title"],
+                item["scenario"],
+                item["question"],
+                json.dumps(item["options"], ensure_ascii=False),
+                item["correct_option"],
+                item["explanation"],
+                item["points"],
+                item["difficulty"]
+            )
 
-        # Insert sample challenges only when the table is empty.
-        if count == 0:
-            connection.executemany("""
-                INSERT INTO challenges (
-                    category, title, scenario, question, options,
-                    correct_option, explanation, points, difficulty
-                )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """, [
-                (
-                    item["category"],
-                    item["title"],
-                    item["scenario"],
-                    item["question"],
-                    json.dumps(item["options"]),
-                    item["correct_option"],
-                    item["explanation"],
-                    item["points"],
-                    item["difficulty"]
-                )
-                for item in SEED_CHALLENGES
-            ])
+            existing = connection.execute(
+                "SELECT id FROM challenges WHERE id = ?",
+                (item["id"],)
+            ).fetchone()
+
+            if existing:
+                connection.execute("""
+                    UPDATE challenges
+                    SET category = ?,
+                        title = ?,
+                        scenario = ?,
+                        question = ?,
+                        options = ?,
+                        correct_option = ?,
+                        explanation = ?,
+                        points = ?,
+                        difficulty = ?
+                    WHERE id = ?
+                """, (*values, item["id"]))
+            else:
+                connection.execute("""
+                    INSERT INTO challenges (
+                        id, category, title, scenario, question,
+                        options, correct_option, explanation,
+                        points, difficulty
+                    )
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """, (item["id"], *values))
 
         connection.commit()
 
@@ -354,7 +384,15 @@ def get_database_statistics():
 
 if __name__ == "__main__":
     initialize_database()
+    challenges = get_all_challenges()
+
     print("Database initialized successfully.")
     print(f"Database location: {DATABASE_PATH}")
-    print(f"Challenge count: {len(get_all_challenges())}")
+    print(f"Challenge count: {len(challenges)}")
     print(f"Statistics: {get_database_statistics()}")
+
+    for challenge in challenges:
+        print(
+            f'{challenge["id"]}. {challenge["title"]}: '
+            f'correct option index = {challenge["correct_option"]}'
+        )
